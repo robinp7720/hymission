@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <chrono>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -149,6 +150,25 @@ struct WorkspaceStripReservation {
     Rect band;
     Rect content;
 };
+
+// A reversible, bounded selection transition. Repeated rebuilds keep the same
+// target and clock; interrupted selections start at their current visual value.
+struct WorkspaceStripSelection {
+    using Clock = std::chrono::steady_clock;
+    static constexpr auto duration = std::chrono::milliseconds(180);
+    double from = 0.0;
+    double target = 0.0;
+    Clock::time_point start = {};
+
+    void snap(bool active);
+    void retarget(bool active, Clock::time_point now, bool animate);
+    [[nodiscard]] double value(Clock::time_point now, bool animate) const;
+    [[nodiscard]] bool animating(Clock::time_point now, bool animate) const;
+};
+
+// The active card fills its slot; inactive cards are inset. Selection cannot
+// overlap neighboring cards, the reserved bar, or the overview's window area.
+[[nodiscard]] Rect workspaceStripSelectionRect(const Rect& slot, double selection, double activeScale);
 
 struct GroupProjectionInput {
     std::uintptr_t groupId = 0;

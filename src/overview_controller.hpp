@@ -270,6 +270,7 @@ class OverviewController {
         bool                     newWorkspaceSlot = false;
         bool                     specialWorkspace = false;
         bool                     active = false;
+        WorkspaceStripSelection  selection;
     };
 
     struct DragPreviewTarget {
@@ -629,6 +630,7 @@ class OverviewController {
     [[nodiscard]] WorkspaceStripEmptyMode workspaceStripEmptyMode() const;
     [[nodiscard]] double       workspaceStripThickness(const PHLMONITOR& monitor) const;
     [[nodiscard]] double       workspaceStripGap() const;
+    [[nodiscard]] bool         workspaceStripAnimationsEnabled() const;
     [[nodiscard]] bool         workspaceStripEnabled(const State& state) const;
     [[nodiscard]] bool         isStripOnlyOverviewState(const State& state) const;
     [[nodiscard]] bool         shouldContinuouslyRefreshWorkspaceStripSnapshots() const;
@@ -801,6 +803,7 @@ class OverviewController {
     [[nodiscard]] double       workspaceStripEnterProgress() const;
     [[nodiscard]] Vector2D     workspaceStripEnterOffset(const PHLMONITOR& monitor) const;
     [[nodiscard]] Rect         animatedWorkspaceStripRect(const Rect& rect, const PHLMONITOR& monitor) const;
+    [[nodiscard]] Rect         workspaceStripEntryRect(const WorkspaceStripEntry& entry) const;
     [[nodiscard]] bool         transformBoxForWindow(const PHLWINDOW& window, const PHLMONITOR& monitor, CBox& box, bool scaled) const;
     [[nodiscard]] CRegion      transformRegionForWindow(const PHLWINDOW& window, const PHLMONITOR& monitor, const CRegion& region, bool scaled) const;
     [[nodiscard]] PHLWINDOW    resolveExitFocus(CloseMode mode) const;
@@ -904,7 +907,7 @@ class OverviewController {
     void                                     renderCloseButtons() const;
     void                                     requestCloseHoveredWindow();
     [[nodiscard]] bool workspaceStripEntriesMatchForSnapshot(const WorkspaceStripEntry& lhs, const WorkspaceStripEntry& rhs) const;
-    void carryOverWorkspaceStripSnapshots(State& next, const State& previous) const;
+    void carryOverWorkspaceStripState(State& next, const State& previous) const;
     void renderWorkspaceStrip() const;
     [[nodiscard]] Rect workspaceStripThumbRect(const WorkspaceStripEntry& entry, const PHLMONITOR& monitor) const;
     void refreshWorkspaceStripSnapshots();

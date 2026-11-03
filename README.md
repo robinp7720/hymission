@@ -898,6 +898,7 @@ existing `workspace_strip_*` options continue to control overview only.
 | `workspace_strip_thickness` | int | `160` | Strip thickness. |
 | `workspace_strip_gap` | int | `24` | Gap between the strip and the main overview content. |
 | `workspace_strip_refresh_ms` | int | `500` | Live workspace thumbnail refresh interval in milliseconds. Interaction changes refresh immediately; `0` (or a negative value) restores per-frame refresh. |
+| `workspace_strip_active_scale` | float | `1.12` | Active workspace size relative to inactive cards, clamped to `1.0`–`1.5`. Selection eases over 180 ms; `1.0` keeps equal sizes. Cards stay within their reserved slots, and hit targets follow their visible size. Respects `animations.enabled = false`. |
 
 By default, the workspace strip is shown when the current overview scope displays only the
 active workspace. Set `workspace_strip_force_show = 1` to also show it in other scopes,

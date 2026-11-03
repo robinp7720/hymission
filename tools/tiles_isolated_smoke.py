@@ -28,6 +28,7 @@ def main():
     ap.add_argument("--integration", action="store_true")
     ap.add_argument("--default-off-regression", action="store_true")
     ap.add_argument("--search-geometry-regression", action="store_true")
+    ap.add_argument("--strip-selection-regression", action="store_true")
     ap.add_argument("--opacity-regression", action="store_true")
     ap.add_argument("--opacity-observe", action="store_true")
     ap.add_argument("--opacity-fp16", action="store_true")
@@ -211,6 +212,12 @@ def main():
         else:
             raise RuntimeError("nested output did not appear")
         expected_width = monitors[0]["width"] / monitors[0].get("scale", 1)
+        if args.strip_selection_regression:
+            from workspace_strip_selection_regression import run
+            run(request, root, env, runtime, processes, handles)
+            assert child.poll() is None, "compositor exited during workspace strip regression"
+            (root / "configerrors.txt").write_text(request("/configerrors"))
+            return
         if args.fb19_regression:
             from overview_fb19_regression import run
             run(args.fb19_regression,args.fb19_observe,args.fb19_fp16,request,root,env,runtime,processes,handles)

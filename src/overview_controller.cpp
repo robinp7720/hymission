@@ -2864,7 +2864,13 @@ std::string OverviewController::overviewStateJson() const {
     if (auto* tiles=TilesController::get();tiles && workspaceScoped()) for (const auto& mon:m_state.participatingMonitors) for (const auto& view:tiles->views(mon)) {
         root["tile_groups"].push_back({{"monitor",mon->m_name},{"tile_id",view.id},{"focused",view.focused && Desktop::focusState()->monitor()==mon},{"geometry",rectJson({view.allocation.x,view.allocation.y,view.allocation.w,view.allocation.h})}});
     }
-    for (const auto& entry:m_state.stripEntries) root["strip"].push_back({{"monitor",entry.monitor?entry.monitor->m_name:""},{"tile_id",entry.tileId},{"workspace",entry.workspaceId},{"active",entry.active},{"focused_tile",entry.groupFocused},{"geometry",rectJson(entry.rect)}});
+    for (const auto& entry : m_state.stripEntries) {
+        root["strip"].push_back({{"monitor", entry.monitor ? entry.monitor->m_name : ""}, {"tile_id", entry.tileId},
+            {"workspace", entry.workspaceId}, {"active", entry.active}, {"focused_tile", entry.groupFocused},
+            {"new_workspace", entry.newWorkspaceSlot}, {"geometry", rectJson(entry.rect)},
+            {"visual_geometry", rectJson(workspaceStripEntryRect(entry))},
+            {"selection", entry.selection.value(std::chrono::steady_clock::now(), workspaceStripAnimationsEnabled())}});
+    }
     std::size_t zIndex = 0;
     for (const auto& managed : m_state.windows) {
         if (!managed.window)
@@ -4037,6 +4043,7 @@ void OverviewController::handleWorkspaceChange(PHLWORKSPACE workspace) {
                 continue;
 
             entry.active = active;
+            entry.selection.retarget(active, std::chrono::steady_clock::now(), workspaceStripAnimationsEnabled());
             changed = true;
         }
         return changed;
@@ -5837,6 +5844,12 @@ double OverviewController::workspaceStripGap() const {
     return std::max(0.0, static_cast<double>(getConfigInt(m_handle, "plugin:hymission:workspace_strip_gap", 24)));
 }
 
+bool OverviewController::workspaceStripAnimationsEnabled() const {
+    // Workspace commits temporarily disable native animations. Preserve the
+    // user's reduced-motion preference rather than that internal override.
+    return (m_animationsEnabledOverridden ? m_animationsEnabledBackup : getConfigInt(m_handle, "animations:enabled", 1)) != 0;
+}
+
 bool OverviewController::workspaceStripEnabled(const State& state) const {
     const bool forceShow = getConfigInt(m_handle, "plugin:hymission:workspace_strip_force_show", 0) != 0;
     return (state.collectionPolicy.onlyActiveWorkspace || forceShow) && !state.suppressWorkspaceStrip;
@@ -7301,7 +7314,11 @@ void OverviewController::commitOverviewWorkspaceTransition(bool followGesture) {
         next.relayoutStart = {};
 
         clearOverviewWorkspaceTransition(targetWorkspace);
-        carryOverWorkspaceStripSnapshots(next, m_state);
+        // The target state was prepared before the native workspace changed.
+        // Refresh its selection now, before carrying over the size animation.
+        for (auto& entry : next.stripEntries)
+            entry.active = isCurrentActiveWorkspaceStripEntry(entry);
+        carryOverWorkspaceStripState(next, m_state);
         m_state = std::move(next);
         sendSearchResultCount();
         applyWorkspaceNameOverrides(m_state);
@@ -8617,7 +8634,7 @@ std::vector<Rect> OverviewController::stripRects() const {
     rects.reserve(m_state.stripEntries.size());
 
     for (const auto& entry : m_state.stripEntries)
-        rects.push_back(animatedWorkspaceStripRect(entry.rect, entry.monitor));
+        rects.push_back(workspaceStripEntryRect(entry));
 
     return rects;
 }
@@ -9845,7 +9862,7 @@ std::optional<OverviewController::DragPreviewTarget> OverviewController::dragged
     if (m_state.hoveredStripIndex && *m_state.hoveredStripIndex < m_state.stripEntries.size()) {
         const auto& entry = m_state.stripEntries[*m_state.hoveredStripIndex];
         if (entry.monitor == monitor && (!entry.workspace || entry.workspace != window->m_workspace)) {
-            const Rect animatedArea = animatedWorkspaceStripRect(entry.rect, monitor);
+            const Rect animatedArea = workspaceStripEntryRect(entry);
             std::optional<Rect> predictedPreview;
             if (entry.snapshot && entry.snapshot->dropPreview) {
                 if (entry.snapshot->dropPreviewRect && entry.rect.width > 0.0 && entry.rect.height > 0.0) {
@@ -10004,7 +10021,7 @@ double OverviewController::draggedPreviewTargetScaleForHover() const {
     if (!referenceEntry)
         return DRAG_PREVIEW_SCALE;
 
-    const Rect thumbnail = animatedWorkspaceStripRect(referenceEntry->rect, dragged.targetMonitor);
+    const Rect thumbnail = workspaceStripEntryRect(*referenceEntry);
     if (thumbnail.width <= 1.0)
         return DRAG_PREVIEW_SCALE;
 
@@ -10450,6 +10467,12 @@ Rect OverviewController::animatedWorkspaceStripRect(const Rect& rect, const PHLM
         return rect;
 
     return translateRect(rect, offset.x, offset.y);
+}
+
+Rect OverviewController::workspaceStripEntryRect(const WorkspaceStripEntry& entry) const {
+    const double selection = entry.selection.value(std::chrono::steady_clock::now(), workspaceStripAnimationsEnabled());
+    const double scale = getConfigFloat(m_handle, "plugin:hymission:workspace_strip_active_scale", 1.12, 1.0, 1.5);
+    return animatedWorkspaceStripRect(workspaceStripSelectionRect(entry.rect, selection, scale), entry.monitor);
 }
 
 double OverviewController::relayoutVisualProgress() const {
@@ -11660,7 +11683,7 @@ void OverviewController::beginOpen(const PHLMONITOR& monitor, ScopeOverride requ
     next.animationToVisual = 1.0;
     next.animationStart = {};
     m_deactivatePending = false;
-    carryOverWorkspaceStripSnapshots(next, m_state);
+    carryOverWorkspaceStripState(next, m_state);
     m_state = std::move(next);
     sendSearchResultCount();
     warnAboutVimLabels();
@@ -12949,7 +12972,7 @@ void OverviewController::rebuildVisibleState(PHLWINDOW preferredSelectedWindow, 
     }
 
     clearStripWindowDragState();
-    carryOverWorkspaceStripSnapshots(next, m_state);
+    carryOverWorkspaceStripState(next, m_state);
     restoreOverviewRenderState();
     m_state = std::move(next);
     sendSearchResultCount();
@@ -13499,24 +13522,24 @@ bool OverviewController::workspaceStripEntriesMatchForSnapshot(const WorkspaceSt
     return true;
 }
 
-void OverviewController::carryOverWorkspaceStripSnapshots(State& next, const State& previous) const {
+void OverviewController::carryOverWorkspaceStripState(State& next, const State& previous) const {
     if (next.stripEntries.empty() || previous.stripEntries.empty())
         return;
 
-    // Keep the previous strip textures alive until the async refresh repaints
+    // Keep selection motion and previous textures alive until the async refresh repaints
     // the new state. Otherwise workspace commits briefly render only the card
     // background because the replacement snapshot is deferred to doLater().
     for (auto& nextEntry : next.stripEntries) {
-        if (nextEntry.snapshot || nextEntry.newWorkspaceSlot)
-            continue;
-
         const auto previousIt = std::find_if(previous.stripEntries.begin(), previous.stripEntries.end(), [&](const WorkspaceStripEntry& previousEntry) {
-            return previousEntry.snapshot && workspaceStripEntriesMatchForSnapshot(nextEntry, previousEntry);
+            return workspaceStripEntriesMatchForSnapshot(nextEntry, previousEntry);
         });
         if (previousIt == previous.stripEntries.end())
             continue;
 
-        nextEntry.snapshot = previousIt->snapshot;
+        nextEntry.selection = previousIt->selection;
+        nextEntry.selection.retarget(nextEntry.active, std::chrono::steady_clock::now(), workspaceStripAnimationsEnabled());
+        if (!nextEntry.snapshot && !nextEntry.newWorkspaceSlot)
+            nextEntry.snapshot = previousIt->snapshot;
     }
 }
 
@@ -14660,7 +14683,9 @@ void OverviewController::renderWorkspaceStrip() const {
             return dragged.window && dragged.targetMonitor == entry.monitor && (!entry.workspace || entry.workspace != dragged.window->m_workspace);
         }();
         const bool dropAffected = dropAnimationMatchesEntry(entry);
-        const Rect outerGlobal = animatedWorkspaceStripRect(entry.rect, renderMonitor);
+        const Rect outerGlobal = workspaceStripEntryRect(entry);
+        if (entry.selection.animating(std::chrono::steady_clock::now(), workspaceStripAnimationsEnabled()))
+            g_pHyprRenderer->damageMonitor(renderMonitor);
         const Rect outer = rectToMonitorLocal(outerGlobal, renderMonitor);
         if (outer.width <= 0.0 || outer.height <= 0.0)
             continue;
@@ -14942,6 +14967,9 @@ void OverviewController::buildWorkspaceStripEntries(State& state) const {
 
         state.stripEntries.insert(state.stripEntries.end(), monitorEntries.begin(), monitorEntries.end());
     }
+
+    for (auto& entry : state.stripEntries)
+        entry.selection.snap(entry.active);
 
     const auto focusWindow = state.focusDuringOverview ? state.focusDuringOverview : Desktop::focusState()->window();
     const auto groupPolicy = groupedWindowsPolicy();

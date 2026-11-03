@@ -465,6 +465,7 @@ static void registerConfigValues() {
     INT_CONF("stage_maximize_cover_strip", 0);
     INT_CONF("stage_refresh_ms", 16);
     INT_CONF("workspace_strip_gap", 24);
+    FLOAT_CONF("workspace_strip_active_scale", 1.12F);
     INT_CONF("workspace_strip_refresh_ms", 500);
     INT_CONF("workspace_strip_force_show", 0);
     INT_CONF("hide_bar_when_strip", 1);

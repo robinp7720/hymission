@@ -14,6 +14,45 @@
 
 namespace hymission {
 
+void WorkspaceStripSelection::snap(bool active) {
+    from = target = active ? 1.0 : 0.0;
+    start = {};
+}
+
+double WorkspaceStripSelection::value(Clock::time_point now, bool animate) const {
+    if (!animate || from == target)
+        return target;
+    const double t = std::clamp(std::chrono::duration<double>(now - start).count() /
+                                   std::chrono::duration<double>(duration).count(), 0.0, 1.0);
+    const double eased = t * t * (3.0 - 2.0 * t);
+    return from + (target - from) * eased;
+}
+
+bool WorkspaceStripSelection::animating(Clock::time_point now, bool animate) const {
+    return animate && from != target && now - start < duration;
+}
+
+void WorkspaceStripSelection::retarget(bool active, Clock::time_point now, bool animate) {
+    if (!animate) {
+        snap(active);
+        return;
+    }
+    const double next = active ? 1.0 : 0.0;
+    if (target == next)
+        return;
+    from = value(now, true);
+    target = next;
+    start = now;
+}
+
+Rect workspaceStripSelectionRect(const Rect& slot, double selection, double activeScale) {
+    const double inactiveScale = 1.0 / finiteConfig(activeScale, 1.12, 1.0, 1.5);
+    const double scale = inactiveScale + (1.0 - inactiveScale) * finiteConfig(selection, 0.0, 0.0, 1.0);
+    const double width = slot.width * scale;
+    const double height = slot.height * scale;
+    return {slot.x + (slot.width - width) * 0.5, slot.y + (slot.height - height) * 0.5, width, height};
+}
+
 float animationMovePercent(std::string style) {
     std::ranges::transform(style, style.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
 

@@ -49,6 +49,49 @@ bool expectReservation(const WorkspaceStripReservation& actual, const WorkspaceS
 int main() {
     using namespace hymission;
 
+    {
+        WorkspaceStripSelection selection;
+        const auto start = WorkspaceStripSelection::Clock::time_point{};
+        selection.retarget(true, start, true);
+        const auto middle = start + std::chrono::milliseconds(90);
+        if (!expect(closeEnough(selection.value(start, true), 0.0) && closeEnough(selection.value(middle, true), 0.5),
+                    "workspace selection grows through intermediate sizes") ||
+            !expect(selection.animating(middle, true) && !selection.animating(start + selection.duration, true),
+                    "selection must schedule frames only until it settles"))
+            return EXIT_FAILURE;
+        selection.retarget(true, middle, true);
+        if (!expect(closeEnough(selection.value(middle, true), 0.5) && closeEnough(selection.value(start + selection.duration, true), 1.0),
+                    "rebuilding an unchanged selection must not restart the animation"))
+            return EXIT_FAILURE;
+        selection.retarget(false, middle, true);
+        if (!expect(closeEnough(selection.value(middle, true), 0.5) &&
+                        closeEnough(selection.value(middle + selection.duration, true), 0.0),
+                    "reversing selection must start at the current size without a jump"))
+            return EXIT_FAILURE;
+        selection.retarget(true, middle, false);
+        if (!expect(closeEnough(selection.value(middle, false), 1.0) && !selection.animating(middle, false),
+                    "reduced motion must snap to the selected size without scheduling frames"))
+            return EXIT_FAILURE;
+
+        for (const Rect slot : {Rect{20, 48, 240, 135}, Rect{1920, 500, 130, 200}, Rect{3500, 700, 24, 16}}) {
+            const auto inactive = workspaceStripSelectionRect(slot, 0.0, 1.12);
+            const auto active = workspaceStripSelectionRect(slot, 1.0, 1.12);
+            if (!expectRect(active, slot, "active workspace must fit the original reserved slot") ||
+                !expect(closeEnough(active.width / inactive.width, 1.12) && closeEnough(active.height / inactive.height, 1.12),
+                        "active workspace must be twelve percent larger on both axes") ||
+                !expectRect(workspaceStripSelectionRect(slot, 0.0, 1.0), slot, "scale one preserves equal card sizes"))
+                return EXIT_FAILURE;
+            for (double t : {-1.0, 0.0, 0.25, 0.5, 0.75, 1.0, 2.0}) {
+                const auto rect = workspaceStripSelectionRect(slot, t, 1.12);
+                if (!expect(rect.x >= slot.x && rect.y >= slot.y && rect.x + rect.width <= slot.x + slot.width + 1e-9 &&
+                                rect.y + rect.height <= slot.y + slot.height + 1e-9 &&
+                                closeEnough(rect.centerX(), slot.centerX()) && closeEnough(rect.centerY(), slot.centerY()),
+                            "selection geometry must stay centered and inside its slot at every frame"))
+                    return EXIT_FAILURE;
+            }
+        }
+    }
+
     // Quickshell reserves 58px but keeps an 820px layer for popups. The
     // visible bar center must stay fixed under scaling, leaving the full
     // +/-128px strip translation intact instead of cancelling it on a 6K screen.

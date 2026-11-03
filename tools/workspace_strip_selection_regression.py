@@ -1,0 +1,127 @@
+"""Rendered workspace selection and click geometry in a private compositor."""
+import json
+from pathlib import Path
+import subprocess
+import time
+
+from PIL import Image
+
+
+def run(request, root, env, runtime, processes, handles):
+    def evaluate(code):
+        reply = request('/eval ' + code)
+        assert reply.strip() == 'ok', (code, reply)
+
+    def state():
+        return json.loads(request('j/hymission-overview-state'))
+
+    def wait(predicate):
+        for _ in range(200):
+            current = state()
+            if predicate(current):
+                return current
+            time.sleep(.02)
+        raise AssertionError(current)
+
+    def selected(current, workspace):
+        entries = current.get('strip', [])
+        return current['phase'] == 'active' and any(
+            e['workspace'] == workspace and e['active'] and e['selection'] == 1
+            for e in entries)
+
+    child = env.copy()
+    child.pop('LD_PRELOAD', None)
+    child['WAYLAND_DISPLAY'] = next(p.name for p in runtime.glob('wayland-*') if p.is_socket())
+    flags = subprocess.check_output(['pkg-config', '--cflags', '--libs', 'gtk4', 'gtk4-layer-shell-0'], text=True).split()
+    bar = root / 'bar'
+    subprocess.run(['cc', str(Path(__file__).with_name('search_reserved_test_bar.c')), *flags, '-o', str(bar)], check=True)
+    log = open(root / 'bar.log', 'w')
+    handles.append(log)
+    processes.append(subprocess.Popen([str(bar)], env=child, stdout=log, stderr=subprocess.STDOUT))
+
+    evaluate('hl.monitor({output="",mode="1280x720@60",position="auto",scale="1"}); '
+             'hl.config({animations={enabled=true},input={follow_mouse=0},'
+             'plugin={hymission={tiles_enabled=0,stage_enabled=0,search_enabled=0,'
+             'workspace_strip_thickness=160,workspace_strip_active_scale=1.12,debug_logs=1,'
+             'workspace_change_keeps_overview=1,hide_bar_when_strip=0,'
+             'overview_focus_follows_mouse=0,workspace_strip_empty_mode="existing"}}})')
+    for workspace in (701, 702, 703):
+        evaluate(f'hl.workspace_rule({{workspace="{workspace}",persistent=true}}); '
+                 f'hl.dispatch(hl.dsp.focus({{workspace={workspace}}}))')
+        if workspace != 703:
+            log = open(root / f'client-{workspace}.log', 'w')
+            handles.append(log)
+            client = subprocess.Popen(['weston-simple-shm'], env=child, stdout=log, stderr=subprocess.STDOUT)
+            processes.append(client)
+            for _ in range(100):
+                if any(c['pid'] == client.pid for c in json.loads(request('j/clients'))):
+                    break
+                time.sleep(.02)
+            else:
+                raise AssertionError(f'workspace {workspace} client did not map')
+    for _ in range(100):
+        if json.loads(request('j/monitors'))[0]['reserved'][1] == 48:
+            break
+        time.sleep(.02)
+    else:
+        raise AssertionError('exclusive bar did not reserve its top edge')
+
+    results = []
+    for anchor in ('top', 'left', 'right'):
+        evaluate(f'hl.config({{plugin={{hymission={{workspace_strip_anchor="{anchor}"}}}}}}); '
+                 'hl.dispatch(hl.dsp.focus({workspace=701})); '
+                 'hl.plugin.hymission.open("onlycurrentworkspace")')
+        initial = wait(lambda s: selected(s, 701))
+        target = next(e for e in initial['strip'] if e['workspace'] == 702)
+        rect = target['visual_geometry']
+        x, y = rect['x'] + rect['width'] / 2, rect['y'] + rect['height'] / 2
+        prefix = root / (anchor + '-switch')
+        evaluate(f'hl.plugin.hymission_tiles_test.pointer("move",{x},{y})')
+        time.sleep(.1)
+        evaluate('hl.plugin.hymission_tiles_test.frame_capture("begin")')
+        evaluate(f'assert(hl.plugin.hymission_tiles_test.pointer("press",{x},{y}))')
+        time.sleep(.03)
+        evaluate(f'assert(hl.plugin.hymission_tiles_test.pointer("release",{x},{y}))')
+        final = wait(lambda s: selected(s, 702))
+        time.sleep(.08)
+        evaluate('hl.plugin.hymission_tiles_test.frame_capture("end",' + json.dumps(str(prefix)) + ')')
+        frames = json.loads(prefix.with_suffix('.json').read_text())
+        values = [e['selection'] for f in frames for e in f['overview'].get('strip', []) if e['workspace'] == 702]
+        assert any(.05 < value < .95 for value in values), (anchor, values)
+        active = next(e for e in final['strip'] if e['workspace'] == 702)
+        inactive = next(e for e in final['strip'] if e['workspace'] == 701)
+        ratio = active['visual_geometry']['width'] / inactive['visual_geometry']['width']
+        assert abs(ratio - 1.12) < .001, (anchor, ratio)
+        for frame in frames:
+            for entry in frame['overview'].get('strip', []):
+                slot, visible = entry['geometry'], entry['visual_geometry']
+                assert visible['x'] >= slot['x'] - .01 and visible['y'] >= slot['y'] - .01
+                assert visible['x'] + visible['width'] <= slot['x'] + slot['width'] + .01
+                assert visible['y'] + visible['height'] <= slot['y'] + slot['height'] + .01
+                assert visible['y'] >= 48 - .01, (anchor, entry)
+            source = Path(frame['pixels'])
+            png = source.with_suffix('.png')
+            Image.open(source).save(png)
+            source.unlink()
+            frame['pixels'] = str(png)
+        prefix.with_suffix('.json').write_text(json.dumps(frames, indent=2))
+        subprocess.run(['grim', str(root / (anchor + '-selected.png'))], env=child, check=True, capture_output=True)
+        results.append(dict(anchor=anchor, frames=len(frames), active_size_ratio=ratio, intermediate_frames=sum(.05 < v < .95 for v in values)))
+
+        # Reduced motion updates selection immediately, including on a rebuild.
+        evaluate('hl.config({animations={enabled=false}}); hl.dispatch(hl.dsp.focus({workspace=703}))')
+        reduced = wait(lambda s: selected(s, 703))
+        assert all(e['selection'] in (0, 1) for e in reduced['strip'])
+        evaluate('hl.plugin.hymission.close()')
+        wait(lambda s: not s['active'])
+        evaluate('hl.config({animations={enabled=true}})')
+
+    evaluate('hl.config({plugin={hymission={workspace_strip_active_scale=1}}}); hl.plugin.hymission.open("onlycurrentworkspace")')
+    equal = wait(lambda s: s['phase'] == 'active')
+    assert all(e['geometry'] == e['visual_geometry'] for e in equal['strip'])
+    evaluate('hl.plugin.hymission.close()')
+    wait(lambda s: not s['active'])
+    errors = request('/configerrors').strip()
+    assert errors in ('', 'ok'), errors
+    (root / 'results.json').write_text(json.dumps(results, indent=2))
+    print('PASS: animated workspace selection, three anchors, visible click targets, bar reservation, reduced motion, equal-size opt-out')
