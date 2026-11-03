@@ -5216,10 +5216,11 @@ OverviewController::CollectionPolicy OverviewController::loadCollectionPolicy(Sc
     }
 
     if (requestedScope == ScopeOverride::ForceAll) {
+        // Lets the expanded side of `recommand` gestures stay on the anchor monitor.
         return {
             .requestedScope = requestedScope,
             .onlyActiveWorkspace = false,
-            .onlyActiveMonitor = false,
+            .onlyActiveMonitor = getConfigInt(m_handle, "plugin:hymission:forceall_only_active_monitor", 0) != 0,
             .includeSpecial = true,
         };
     }

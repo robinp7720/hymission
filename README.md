@@ -388,6 +388,7 @@ hl.config({
             multi_workspace_sort_recent_first = 1,
             only_active_workspace = 0,
             only_active_monitor = 0,
+            forceall_only_active_monitor = 0,
             show_special = 0,
             workspace_change_keeps_overview = 1,
 
@@ -527,6 +528,7 @@ Non-finite numeric settings use their defaults. Layout padding, spacing and mini
 | `multi_workspace_sort_recent_first` | bool | `1` | Multi-workspace overview only. When enabled, `forceall` and any default overview scope that spans multiple workspaces place more recently used windows earlier in the grid, filling left-to-right then top-to-bottom. |
 | `only_active_workspace` | bool | `0` | Restrict the default scope to the active regular workspace per participating monitor. |
 | `only_active_monitor` | bool | `0` | Restrict the default scope to the monitor under the cursor. |
+| `forceall_only_active_monitor` | bool | `0` | Restrict `forceall`, including the expanded side of `recommand` gestures, to the monitor under the cursor. It still collects every workspace and visible special workspace on that monitor. |
 | `show_special` | bool | `0` | Include currently visible special workspaces in the default scope. |
 | `workspace_change_keeps_overview` | bool | `1` | Keep overview open when switching workspaces in active-workspace scope. |
 | `gesture_close_restores_focus` | bool | `1` | When a trackpad close gesture (swipe) commits, return focus to the window that was focused before overview opened instead of activating the hovered preview. Click and `Return` still activate the selection. Set to `0` for the old behaviour where a swipe-close commits whatever the pointer hovers. |

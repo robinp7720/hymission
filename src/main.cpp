@@ -432,6 +432,7 @@ static void registerConfigValues() {
     INT_CONF("one_workspace_per_row", 0);
     INT_CONF("only_active_workspace", 0);
     INT_CONF("only_active_monitor", 0);
+    INT_CONF("forceall_only_active_monitor", 0);
     INT_CONF("show_special", 0);
     INT_CONF("toggle_switch_mode", 0);
     INT_CONF("switch_toggle_auto_next", 1);
