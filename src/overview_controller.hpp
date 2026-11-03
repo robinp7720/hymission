@@ -575,6 +575,7 @@ class OverviewController {
     [[nodiscard]] bool         barSingleMissionControlEnabled() const;
     [[nodiscard]] bool         showFocusIndicatorEnabled() const;
     [[nodiscard]] bool         vimKeysEnabled() const;
+    [[nodiscard]] bool         searchEnabled() const;
     [[nodiscard]] bool         pickLabelsEnabled() const;
     [[nodiscard]] bool         pickLabelsShown() const;
     [[nodiscard]] PickLabelsMode pickLabelsMode() const;

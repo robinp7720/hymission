@@ -340,6 +340,8 @@ reserved while search is hidden, so starting a search does not move previews.
 `outer_padding_top` adds space below the header; its default remains `32`.
 If you previously used `92` solely to avoid the search box, change it to `32`:
 keeping `92` is supported and adds another 60 pixels of breathing room.
+With `search_enabled = 0`, no header is reserved and previews start directly
+below the exclusive zones and the workspace strip.
 `hide_bar_when_strip` hides exclusive bars visually but keeps their reservation,
 so hiding a bar does not move the strip or search box into its reserved area.
 
@@ -673,6 +675,10 @@ Outside search, `Tab` and `Shift+Tab` cycle the selection in the same order the 
 ### Window search
 
 Search filters the current overview scope by Unicode-normalized, case-insensitive window title or class and relayouts matching previews as the query changes.
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `search_enabled` | bool | `1` | Offer window search. With `0`, overview never starts the search helper, `/` does not enter search, and no search header is reserved. |
 
 - With `vim_keys = 1`, overview opens ready for `h/j/k/l` navigation with pick labels forcibly disabled. Press `/` to enter search; letters then type normally.
 - Outside search, `Tab` / `Shift+Tab` cycle selection forward / backward, independently of `vim_keys`.

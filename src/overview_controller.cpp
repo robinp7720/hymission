@@ -3722,7 +3722,7 @@ bool OverviewController::ensureSearchInputFocus() {
 }
 
 bool OverviewController::startSearchInput() {
-    if (sessionLocked()) {
+    if (sessionLocked() || !searchEnabled()) {
         stopSearchInput();
         return false;
     }
@@ -5375,6 +5375,10 @@ bool OverviewController::showFocusIndicatorEnabled() const {
 
 bool OverviewController::vimKeysEnabled() const {
     return getConfigInt(m_handle, "plugin:hymission:vim_keys", 0) != 0;
+}
+
+bool OverviewController::searchEnabled() const {
+    return getConfigInt(m_handle, "plugin:hymission:search_enabled", 1) != 0;
 }
 
 bool OverviewController::pickLabelsEnabled() const {
@@ -8562,7 +8566,9 @@ Rect OverviewController::overviewAvailableRectForMonitor(const PHLMONITOR& monit
 Rect OverviewController::overviewContentRectForMonitor(const PHLMONITOR& monitor, const State& state) const {
     if (!monitor)
         return {};
-    return reserveSearchHeader(overviewAvailableRectForMonitor(monitor, state)).content;
+    // Without search, previews may use the header band.
+    const Rect available = overviewAvailableRectForMonitor(monitor, state);
+    return searchEnabled() ? reserveSearchHeader(available).content : available;
 }
 
 std::string OverviewController::searchInputPlacement() const {
@@ -8601,7 +8607,7 @@ Rect OverviewController::tileContentRect(const PHLMONITOR& monitor,uint64_t tile
         if (workspaceStripEnabled(state))
             area = contentAfterGlobalStripColumns(area, workspaceStripBandRectForMonitor(monitor, state),
                                                  monitor->m_position.x, workspaceStripGap());
-        return reserveSearchHeader(area).content;
+        return searchEnabled() ? reserveSearchHeader(area).content : area;
     }
     return {};
 }

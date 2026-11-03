@@ -478,6 +478,7 @@ static void registerConfigValues() {
     INT_CONF("bar_single_mission_control", 0);
     INT_CONF("show_focus_indicator", 0);
     INT_CONF("vim_keys", 0);
+    INT_CONF("search_enabled", 1);
     INT_CONF("pick_labels_enabled", 0);
     INT_CONF("pick_labels_show", 1);
     STRING_CONF("pick_labels_mode", "sequential");
