@@ -532,7 +532,7 @@ Non-finite numeric settings use their defaults. Layout padding, spacing and mini
 | `only_active_monitor` | bool | `0` | Restrict the default scope to the monitor under the cursor. |
 | `forceall_only_active_monitor` | bool | `0` | Restrict `forceall`, including the expanded side of `recommand` gestures, to the monitor under the cursor. It still collects every workspace and visible special workspace on that monitor. |
 | `show_special` | bool | `0` | Include currently visible special workspaces in the default scope. |
-| `workspace_change_keeps_overview` | bool | `1` | Keep overview open when switching workspaces in active-workspace scope. |
+| `workspace_change_keeps_overview` | bool | `1` | Keep overview open when switching workspaces in active-workspace scope. The overview slide publishes live progress on socket2 as `workspaceswipe>>MONITOR,FROM,TO,PROGRESS` (signed fraction of one step) and `workspaceswipeend>>MONITOR` after the final `workspace` event, the same protocol bars use for native swipes. |
 | `gesture_close_restores_focus` | bool | `1` | When a trackpad close gesture (swipe) commits, return focus to the window that was focused before overview opened instead of activating the hovered preview. Click and `Return` still activate the selection. Set to `0` for the old behaviour where a swipe-close commits whatever the pointer hovers. |
 
 In multi-workspace overview, hover-driven real focus may still cross workspaces,

@@ -175,6 +175,11 @@ struct WorkspaceStripSelection {
 // swipe moves the indicator 1:1 and a cancelled swipe brings it back.
 [[nodiscard]] double trackedWorkspaceStripSelection(double resting, bool target, double delta, double distance);
 
+// socket2 payload for live in-overview workspace transitions, matching
+// tools/hypr-swipe-events: MONITOR,FROM_ID,TO_ID,PROGRESS where PROGRESS is a
+// signed fraction of one workspace step (negative heads to the previous one).
+[[nodiscard]] std::string workspaceSwipeEventPayload(std::string_view monitor, int64_t from, int64_t to, double delta, double distance);
+
 // Straight (non-premultiplied) RGBA, matching Hyprland's color config values.
 struct StripColor {
     double r = 0.0;

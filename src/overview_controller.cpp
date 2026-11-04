@@ -6913,6 +6913,9 @@ bool OverviewController::beginOverviewWorkspaceTransition(const PHLMONITOR& moni
     target.relayoutStart = {};
 
     const auto transitionWorkspace = monitor->m_activeWorkspace ? monitor->m_activeWorkspace : source.ownerWorkspace;
+    WorkspaceKey sourceWorkspaceId = transitionWorkspace ? workspaceKey(transitionWorkspace) : WORKSPACE_INVALID;
+    if (transitionTile)
+        for (const auto& view:TilesController::get()->views(monitor)) if (view.id==transitionTile && view.workspace) sourceWorkspaceId=workspaceKey(view.workspace);
     const auto transitionAxis = workspaceSwipeUsesVerticalAxis(transitionWorkspace) ? WorkspaceTransitionAxis::Vertical : WorkspaceTransitionAxis::Horizontal;
 
     m_workspaceTransition = {
@@ -6928,6 +6931,7 @@ bool OverviewController::beginOverviewWorkspaceTransition(const PHLMONITOR& moni
         .initialDirection = 0,
         .avgSpeed = 0.0,
         .speedPoints = 0,
+        .sourceWorkspaceId = sourceWorkspaceId,
         .targetWorkspaceId = workspaceId,
         .targetWorkspaceName = overrides.front().workspaceName,
         .targetWorkspaceSyntheticEmpty = syntheticEmpty,
@@ -6985,6 +6989,9 @@ bool OverviewController::beginExternalOverviewWorkspaceTransition(const PHLWORKS
         return false;
 
     m_workspaceTransition.step = step;
+    // The native switch already happened; report the move from the workspace
+    // the overview was showing.
+    m_workspaceTransition.sourceWorkspaceId = workspaceKey(previousWorkspace);
     m_workspaceTransition.initialDirection = 0;
     m_workspaceTransition.delta = 0.0;
     m_workspaceTransition.animationFromDelta = 0.0;
@@ -7151,8 +7158,13 @@ void OverviewController::updateOverviewWorkspaceTransition() {
     if (sessionLocked())
         return;
 
-    if (!m_workspaceTransition.active || m_workspaceTransition.mode == WorkspaceTransitionMode::Gesture)
+    if (!m_workspaceTransition.active)
         return;
+
+    if (m_workspaceTransition.mode == WorkspaceTransitionMode::Gesture) {
+        publishOverviewWorkspaceSwipeProgress();
+        return;
+    }
 
     const auto now = std::chrono::steady_clock::now();
     if (m_workspaceTransition.animationStart == std::chrono::steady_clock::time_point{}) {
@@ -7166,6 +7178,7 @@ void OverviewController::updateOverviewWorkspaceTransition() {
     const double eased = easeOutCubic(m_workspaceTransition.animationProgress);
     m_workspaceTransition.delta =
         m_workspaceTransition.animationFromDelta + (m_workspaceTransition.animationToDelta - m_workspaceTransition.animationFromDelta) * eased;
+    publishOverviewWorkspaceSwipeProgress();
 
     if (m_workspaceTransition.animationProgress < 1.0)
         return;
@@ -7324,7 +7337,12 @@ void OverviewController::commitOverviewWorkspaceTransition(bool followGesture) {
         next.relayoutProgress = 1.0;
         next.relayoutStart = {};
 
-        clearOverviewWorkspaceTransition(targetWorkspace);
+        {
+            // Bars must see the new workspace before the swipe ends, as with a
+            // native swipe; otherwise they spring back to the old one first.
+            ScopedFlag holdSwipeEnd(m_holdWorkspaceSwipeEnd);
+            clearOverviewWorkspaceTransition(targetWorkspace);
+        }
         // The target state was prepared before the native workspace changed.
         // Refresh its selection now, before carrying over the size animation.
         for (auto& entry : next.stripEntries)
@@ -7350,6 +7368,7 @@ void OverviewController::commitOverviewWorkspaceTransition(bool followGesture) {
         }
 
         emitWorkspaceActiveEvents(targetWorkspace);
+        endOverviewWorkspaceSwipeEvents();
     }
 
     if (temporarilyDisabledAnimations)
@@ -7525,7 +7544,36 @@ void OverviewController::restoreOverviewRenderState() {
     m_overviewRenderStateBackups.clear();
 }
 
+void OverviewController::publishOverviewWorkspaceSwipeProgress() {
+    const auto& transition = m_workspaceTransition;
+    if (!transition.active || !transition.monitor || transition.sourceWorkspaceId == WORKSPACE_INVALID || !IPC::Socket2::sock())
+        return;
+
+    const std::string monitorName = transition.monitor->m_name;
+    if (!m_workspaceSwipeEventMonitor.empty() && m_workspaceSwipeEventMonitor != monitorName)
+        endOverviewWorkspaceSwipeEvents();
+
+    auto payload = workspaceSwipeEventPayload(monitorName, transition.sourceWorkspaceId, transition.targetWorkspaceId, transition.delta, transition.distance);
+    if (payload == m_lastWorkspaceSwipeEventPayload)
+        return;
+
+    IPC::Socket2::sock()->postEvent(IPC::Socket2::SEvent{"workspaceswipe", payload});
+    m_workspaceSwipeEventMonitor = monitorName;
+    m_lastWorkspaceSwipeEventPayload = std::move(payload);
+}
+
+void OverviewController::endOverviewWorkspaceSwipeEvents() {
+    if (m_workspaceSwipeEventMonitor.empty() || m_holdWorkspaceSwipeEnd)
+        return;
+
+    if (IPC::Socket2::sock())
+        IPC::Socket2::sock()->postEvent(IPC::Socket2::SEvent{"workspaceswipeend", m_workspaceSwipeEventMonitor});
+    m_workspaceSwipeEventMonitor.clear();
+    m_lastWorkspaceSwipeEventPayload.clear();
+}
+
 void OverviewController::clearOverviewWorkspaceTransition(const PHLWORKSPACE& committedWorkspace) {
+    endOverviewWorkspaceSwipeEvents();
     restoreWorkspaceTransitionRenderState(committedWorkspace);
     clearPendingWindowGeometryRetry();
     m_workspaceTransitionCommitScheduled = false;

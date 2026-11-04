@@ -475,6 +475,7 @@ class OverviewController {
         int                                    initialDirection = 0;
         double                                 avgSpeed = 0.0;
         int                                    speedPoints = 0;
+        WorkspaceKey                           sourceWorkspaceId = WORKSPACE_INVALID;
         WorkspaceKey                           targetWorkspaceId = WORKSPACE_INVALID;
         std::string                            targetWorkspaceName;
         bool                                   targetWorkspaceSyntheticEmpty = false;
@@ -740,6 +741,11 @@ class OverviewController {
     void                       requestOverviewWorkspaceTransitionCommit(bool followGesture = false);
     void                       commitOverviewWorkspaceTransition(bool followGesture = false);
     void                       clearOverviewWorkspaceTransition(const PHLWORKSPACE& committedWorkspace = {});
+    // Live progress on socket2 (workspaceswipe/workspaceswipeend, the
+    // tools/hypr-swipe-events protocol). The overview consumes the native
+    // swipe, so bars would otherwise see nothing until the commit.
+    void                       publishOverviewWorkspaceSwipeProgress();
+    void                       endOverviewWorkspaceSwipeEvents();
     void                       armWorkspaceTransitionRenderState();
     void                       restoreWorkspaceTransitionRenderState(const PHLWORKSPACE& committedWorkspace = {});
     void                       armOverviewRenderState(const State& state);
@@ -1067,6 +1073,9 @@ class OverviewController {
     DeferredSnapshotRefresh m_hiddenStripProxyRefresh;
     SP<CEventLoopTimer> m_hiddenStripProxyRefreshTimer;
     bool                     m_applyingWorkspaceTransitionCommit = false;
+    bool                     m_holdWorkspaceSwipeEnd = false;
+    std::string              m_workspaceSwipeEventMonitor;
+    std::string              m_lastWorkspaceSwipeEventPayload;
     bool                     m_applyingThumbnailNewWindowPlacement = false;
     bool                     m_rebuildVisibleStateAfterWorkspaceTransitionCommit = false;
     bool                     m_workspaceTransitionCommitScheduled = false;

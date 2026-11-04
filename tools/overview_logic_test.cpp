@@ -112,6 +112,20 @@ int main() {
                 return EXIT_FAILURE;
         }
 
+        // In-overview transitions publish the same socket2 payload as
+        // tools/hypr-swipe-events, which Vigil parses as MON,FROM,TO,PROGRESS.
+        if (!expect(workspaceSwipeEventPayload("DP-2", 1, 2, 720.0, 1440.0) == "DP-2,1,2,0.5000",
+                    "forward progress is a signed fraction of one workspace step") ||
+            !expect(workspaceSwipeEventPayload("DP-2", 3, 2, -360.0, 1440.0) == "DP-2,3,2,-0.2500",
+                    "backward progress is negative") ||
+            !expect(workspaceSwipeEventPayload("DP-3", 4, 5, 5000.0, 1440.0) == "DP-3,4,5,1.0000" &&
+                        workspaceSwipeEventPayload("DP-3", 4, 5, -5000.0, 1440.0) == "DP-3,4,5,-1.0000",
+                    "progress is clamped to one step") ||
+            !expect(workspaceSwipeEventPayload("DP-3", 4, 5, 10.0, 0.0) == "DP-3,4,5,0.0000" &&
+                        workspaceSwipeEventPayload("DP-3", 4, 5, std::numeric_limits<double>::quiet_NaN(), 1440.0) == "DP-3,4,5,0.0000",
+                    "invalid geometry reports no progress"))
+            return EXIT_FAILURE;
+
         const StripColor inactiveFill{0.05, 0.09, 0.15, 0.18};
         const StripColor activeFill{0.10, 0.18, 0.32, 0.24};
         const auto sameColor = [](const StripColor& lhs, const StripColor& rhs) {

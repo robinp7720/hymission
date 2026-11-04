@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <format>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -59,6 +60,15 @@ double trackedWorkspaceStripSelection(double resting, bool target, double delta,
         return from;
     const double progress = std::clamp(std::abs(delta) / distance, 0.0, 1.0);
     return from + ((target ? 1.0 : 0.0) - from) * progress;
+}
+
+std::string workspaceSwipeEventPayload(std::string_view monitor, int64_t from, int64_t to, double delta, double distance) {
+    double progress = 0.0;
+    if (std::isfinite(delta) && std::isfinite(distance) && distance > 0.0)
+        progress = std::clamp(delta / distance, -1.0, 1.0);
+    if (progress == 0.0)
+        progress = 0.0; // never print "-0.0000"
+    return std::format("{},{},{},{:.4f}", monitor, from, to, progress);
 }
 
 StripColor mixStripColor(const StripColor& from, const StripColor& to, double selection) {
