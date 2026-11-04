@@ -126,6 +126,44 @@ def run(request, root, env, runtime, processes, handles):
         wait(lambda s: not s['active'])
         evaluate('hl.config({animations={enabled=true}})')
 
+    # A held in-overview swipe moves the indicator with the fingers, a cancel
+    # brings it back, and a completed swipe lands without replaying the ease.
+    def sel(current, workspace):
+        return next(e['selection'] for e in current['strip'] if e['workspace'] == workspace)
+
+    def swipe(dx):
+        for _ in range(4):
+            evaluate(f'hl.plugin.hymission_tiles_test.trackpad("update",0,{dx / 4})')
+            time.sleep(.02)
+
+    evaluate('hl.config({gestures={workspace_swipe_invert=false,workspace_swipe_distance=300,'
+             'workspace_swipe_cancel_ratio=.5,workspace_swipe_min_speed_to_force=0,workspace_swipe_forever=false}}); '
+             'hl.gesture({fingers=4,direction="horizontal",action="workspace"}); '
+             'hl.dispatch(hl.dsp.focus({workspace=701})); hl.plugin.hymission.open("onlycurrentworkspace")')
+    wait(lambda s: selected(s, 701))
+    evaluate('hl.plugin.hymission_tiles_test.trackpad("begin")')
+    swipe(120)
+    held = state()
+    time.sleep(.25)
+    still = state()
+    tracked = dict(source=sel(held, 701), target=sel(held, 702), later_target=sel(still, 702))
+    assert json.loads(request('j/activeworkspace'))['id'] == 701, tracked
+    assert .1 < tracked['target'] < .9 and abs(tracked['source'] + tracked['target'] - 1) < 1e-6, tracked
+    assert abs(tracked['later_target'] - tracked['target']) < 1e-6, ('held swipe must not drift', tracked)
+    swipe(60)
+    assert sel(state(), 702) > tracked['target'] + .05, ('indicator must follow further movement', tracked)
+    evaluate('hl.plugin.hymission_tiles_test.trackpad("cancel")')
+    wait(lambda s: selected(s, 701) and sel(s, 702) == 0)
+    evaluate('hl.plugin.hymission_tiles_test.trackpad("begin")')
+    swipe(240)
+    evaluate('hl.plugin.hymission_tiles_test.trackpad("end")')
+    landed = wait(lambda s: selected(s, 702))
+    assert sel(landed, 701) == 0, ('commit must not replay the selection ease', landed['strip'])
+    tracked['landed'] = True
+    results.append(dict(gesture=tracked))
+    evaluate('hl.plugin.hymission.close()')
+    wait(lambda s: not s['active'])
+
     evaluate('hl.config({plugin={hymission={workspace_strip_active_scale=1}}}); hl.plugin.hymission.open("onlycurrentworkspace")')
     equal = wait(lambda s: s['phase'] == 'active')
     assert all(e['geometry'] == e['visual_geometry'] for e in equal['strip'])
@@ -134,4 +172,4 @@ def run(request, root, env, runtime, processes, handles):
     errors = request('/configerrors').strip()
     assert errors in ('', 'ok'), errors
     (root / 'results.json').write_text(json.dumps(results, indent=2))
-    print('PASS: animated workspace selection and indicator, three anchors, visible click targets, bar reservation, reduced motion, equal-size opt-out')
+    print('PASS: animated workspace selection and indicator, gesture-tracked selection, three anchors, visible click targets, bar reservation, reduced motion, equal-size opt-out')

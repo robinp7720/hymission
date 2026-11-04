@@ -2874,7 +2874,7 @@ std::string OverviewController::overviewStateJson() const {
             {"workspace", entry.workspaceId}, {"active", entry.active}, {"focused_tile", entry.groupFocused},
             {"new_workspace", entry.newWorkspaceSlot}, {"geometry", rectJson(entry.rect)},
             {"visual_geometry", rectJson(workspaceStripEntryRect(entry))},
-            {"selection", entry.selection.value(std::chrono::steady_clock::now(), workspaceStripAnimationsEnabled())},
+            {"selection", workspaceStripEntrySelection(entry)},
             {"indicator", [&] {
                 const auto indicator = workspaceStripIndicator(entry);
                 const auto rgba = [](const CHyprColor& c) { return nlohmann::json::array({c.r, c.g, c.b, c.a}); };
@@ -7239,6 +7239,7 @@ void OverviewController::commitOverviewWorkspaceTransition(bool followGesture) {
     clearPendingWindowGeometryRetry();
 
     const auto transitionMonitor = m_workspaceTransition.monitor;
+    const auto transitionTile = m_workspaceTransition.tileId;
     auto oldWorkspace = transitionMonitor->m_activeWorkspace;
     if (m_workspaceTransition.tileId && TilesController::get())
         for (const auto& view:TilesController::get()->views(transitionMonitor)) if (view.id==m_workspaceTransition.tileId) oldWorkspace=view.workspace;
@@ -7329,6 +7330,12 @@ void OverviewController::commitOverviewWorkspaceTransition(bool followGesture) {
         for (auto& entry : next.stripEntries)
             entry.active = isCurrentActiveWorkspaceStripEntry(entry);
         carryOverWorkspaceStripState(next, m_state);
+        // The indicator already tracked the transition to its target. Settle
+        // there instead of replaying the selection ease after the commit.
+        for (auto& entry : next.stripEntries) {
+            if (entry.monitor == transitionMonitor && (!transitionTile || entry.tileId == transitionTile))
+                entry.selection.snap(entry.active);
+        }
         m_state = std::move(next);
         sendSearchResultCount();
         applyWorkspaceNameOverrides(m_state);
@@ -10480,9 +10487,9 @@ Rect OverviewController::animatedWorkspaceStripRect(const Rect& rect, const PHLM
 }
 
 OverviewController::WorkspaceStripIndicator OverviewController::workspaceStripIndicator(const WorkspaceStripEntry& entry) const {
-    // The active fill and tint follow the same eased selection as the card
-    // size, so the indicator fades between workspaces instead of jumping.
-    const double selection = entry.selection.value(std::chrono::steady_clock::now(), workspaceStripAnimationsEnabled());
+    // The active fill and tint follow the same selection as the card size,
+    // so the indicator moves between workspaces instead of jumping.
+    const double selection = workspaceStripEntrySelection(entry);
     const CHyprColor restingFill = entry.newWorkspaceSlot ? workspaceStripNewColor() :
                                    entry.syntheticEmpty   ? workspaceStripEmptyColor() :
                                                             workspaceStripInactiveColor();
@@ -10490,8 +10497,16 @@ OverviewController::WorkspaceStripIndicator OverviewController::workspaceStripIn
     return {mixHyprColor(restingFill, workspaceStripActiveColor(), selection), mixHyprColor(restingTint, workspaceStripActiveTintColor(), selection)};
 }
 
+double OverviewController::workspaceStripEntrySelection(const WorkspaceStripEntry& entry) const {
+    const double resting = entry.selection.value(std::chrono::steady_clock::now(), workspaceStripAnimationsEnabled());
+    const auto& transition = m_workspaceTransition;
+    if (!transition.active || !transition.monitor || entry.monitor != transition.monitor || (transition.tileId && entry.tileId != transition.tileId))
+        return resting;
+    return trackedWorkspaceStripSelection(resting, entry.workspaceId == transition.targetWorkspaceId, transition.delta, transition.distance);
+}
+
 Rect OverviewController::workspaceStripEntryRect(const WorkspaceStripEntry& entry) const {
-    const double selection = entry.selection.value(std::chrono::steady_clock::now(), workspaceStripAnimationsEnabled());
+    const double selection = workspaceStripEntrySelection(entry);
     const double scale = getConfigFloat(m_handle, "plugin:hymission:workspace_strip_active_scale", 1.12, 1.0, 1.5);
     return animatedWorkspaceStripRect(workspaceStripSelectionRect(entry.rect, selection, scale), entry.monitor);
 }

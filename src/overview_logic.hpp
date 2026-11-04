@@ -170,6 +170,11 @@ struct WorkspaceStripSelection {
 // overlap neighboring cards, the reserved bar, or the overview's window area.
 [[nodiscard]] Rect workspaceStripSelectionRect(const Rect& slot, double selection, double activeScale);
 
+// While an overview workspace transition runs, the strip selection follows its
+// progress (|delta| / distance) from the resting value toward the target, so a
+// swipe moves the indicator 1:1 and a cancelled swipe brings it back.
+[[nodiscard]] double trackedWorkspaceStripSelection(double resting, bool target, double delta, double distance);
+
 // Straight (non-premultiplied) RGBA, matching Hyprland's color config values.
 struct StripColor {
     double r = 0.0;

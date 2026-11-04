@@ -803,6 +803,9 @@ class OverviewController {
     [[nodiscard]] double       workspaceStripEnterProgress() const;
     [[nodiscard]] Vector2D     workspaceStripEnterOffset(const PHLMONITOR& monitor) const;
     [[nodiscard]] Rect         animatedWorkspaceStripRect(const Rect& rect, const PHLMONITOR& monitor) const;
+    // Eased selection, tracking any in-overview workspace transition on the
+    // entry's monitor (and tile) so swipes and switches move the indicator live.
+    [[nodiscard]] double       workspaceStripEntrySelection(const WorkspaceStripEntry& entry) const;
     [[nodiscard]] Rect         workspaceStripEntryRect(const WorkspaceStripEntry& entry) const;
     // Resting fill and tint for a card, blended toward the active colors by its
     // eased selection. Hover tint and overview fade are applied by the caller.

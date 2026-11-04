@@ -53,6 +53,14 @@ Rect workspaceStripSelectionRect(const Rect& slot, double selection, double acti
     return {slot.x + (slot.width - width) * 0.5, slot.y + (slot.height - height) * 0.5, width, height};
 }
 
+double trackedWorkspaceStripSelection(double resting, bool target, double delta, double distance) {
+    const double from = finiteConfig(resting, 0.0, 0.0, 1.0);
+    if (!std::isfinite(delta) || !std::isfinite(distance) || distance <= 0.0)
+        return from;
+    const double progress = std::clamp(std::abs(delta) / distance, 0.0, 1.0);
+    return from + ((target ? 1.0 : 0.0) - from) * progress;
+}
+
 StripColor mixStripColor(const StripColor& from, const StripColor& to, double selection) {
     const double t = finiteConfig(selection, 0.0, 0.0, 1.0);
     const double alpha = from.a + (to.a - from.a) * t;

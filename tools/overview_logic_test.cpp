@@ -91,6 +91,27 @@ int main() {
             }
         }
 
+        // Workspace changes in overview track the transition delta, so the
+        // indicator follows a swipe 1:1 and reverses with a cancelled one.
+        for (const double direction : {1.0, -1.0}) {
+            const double distance = 1440.0;
+            if (!expect(closeEnough(trackedWorkspaceStripSelection(1.0, false, 0.0, distance), 1.0) &&
+                            closeEnough(trackedWorkspaceStripSelection(0.0, true, 0.0, distance), 0.0),
+                        "an untouched transition keeps the current selection") ||
+                !expect(closeEnough(trackedWorkspaceStripSelection(1.0, false, direction * distance * 0.25, distance), 0.75) &&
+                            closeEnough(trackedWorkspaceStripSelection(0.0, true, direction * distance * 0.25, distance), 0.25),
+                        "source and target selection follow the swipe in either direction") ||
+                !expect(closeEnough(trackedWorkspaceStripSelection(1.0, false, direction * distance, distance), 0.0) &&
+                            closeEnough(trackedWorkspaceStripSelection(0.0, true, direction * distance, distance), 1.0) &&
+                            closeEnough(trackedWorkspaceStripSelection(0.0, false, direction * distance * 0.5, distance), 0.0),
+                        "a completed transition lands exactly on the target and leaves bystanders alone") ||
+                !expect(closeEnough(trackedWorkspaceStripSelection(0.0, true, direction * distance * 3.0, distance), 1.0) &&
+                            closeEnough(trackedWorkspaceStripSelection(0.6, true, 100.0, 0.0), 0.6) &&
+                            closeEnough(trackedWorkspaceStripSelection(0.6, true, std::numeric_limits<double>::quiet_NaN(), distance), 0.6),
+                        "overshoot, zero distance and invalid deltas stay bounded"))
+                return EXIT_FAILURE;
+        }
+
         const StripColor inactiveFill{0.05, 0.09, 0.15, 0.18};
         const StripColor activeFill{0.10, 0.18, 0.32, 0.24};
         const auto sameColor = [](const StripColor& lhs, const StripColor& rhs) {
