@@ -804,6 +804,13 @@ class OverviewController {
     [[nodiscard]] Vector2D     workspaceStripEnterOffset(const PHLMONITOR& monitor) const;
     [[nodiscard]] Rect         animatedWorkspaceStripRect(const Rect& rect, const PHLMONITOR& monitor) const;
     [[nodiscard]] Rect         workspaceStripEntryRect(const WorkspaceStripEntry& entry) const;
+    // Resting fill and tint for a card, blended toward the active colors by its
+    // eased selection. Hover tint and overview fade are applied by the caller.
+    struct WorkspaceStripIndicator {
+        CHyprColor fill;
+        CHyprColor tint;
+    };
+    [[nodiscard]] WorkspaceStripIndicator workspaceStripIndicator(const WorkspaceStripEntry& entry) const;
     [[nodiscard]] bool         transformBoxForWindow(const PHLWINDOW& window, const PHLMONITOR& monitor, CBox& box, bool scaled) const;
     [[nodiscard]] CRegion      transformRegionForWindow(const PHLWINDOW& window, const PHLMONITOR& monitor, const CRegion& region, bool scaled) const;
     [[nodiscard]] PHLWINDOW    resolveExitFocus(CloseMode mode) const;

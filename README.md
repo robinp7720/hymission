@@ -898,7 +898,7 @@ existing `workspace_strip_*` options continue to control overview only.
 | `workspace_strip_thickness` | int | `160` | Strip thickness. |
 | `workspace_strip_gap` | int | `24` | Gap between the strip and the main overview content. |
 | `workspace_strip_refresh_ms` | int | `500` | Live workspace thumbnail refresh interval in milliseconds. Interaction changes refresh immediately; `0` (or a negative value) restores per-frame refresh. |
-| `workspace_strip_active_scale` | float | `1.12` | Active workspace size relative to inactive cards, clamped to `1.0`–`1.5`. Selection eases over 180 ms; `1.0` keeps equal sizes. Cards stay within their reserved slots, and hit targets follow their visible size. Respects `animations.enabled = false`. |
+| `workspace_strip_active_scale` | float | `1.12` | Active workspace size relative to inactive cards, clamped to `1.0`–`1.5`. Selection eases over 180 ms, and the active fill and tint fade with it; `1.0` keeps equal sizes. Cards stay within their reserved slots, and hit targets follow their visible size. Respects `animations.enabled = false`. |
 
 By default, the workspace strip is shown when the current overview scope displays only the
 active workspace. Set `workspace_strip_force_show = 1` to also show it in other scopes,
@@ -957,11 +957,11 @@ Label chips reuse the close-button background, glyph, and size settings.
 | --- | --- | --- | --- |
 | `workspace_strip_background_color` | color | `rgba(0812243d)` | Strip band background color. |
 | `workspace_strip_inactive_color` | color | `rgba(0d17262e)` | Inactive workspace card fill. |
-| `workspace_strip_active_color` | color | `rgba(1a2e523d)` | Active workspace card fill. |
+| `workspace_strip_active_color` | color | `rgba(1a2e523d)` | Active workspace card fill. Fades in and out with the selection animation. |
 | `workspace_strip_empty_color` | color | `rgba(0f1a292e)` | Synthetic empty workspace card fill. |
 | `workspace_strip_new_color` | color | `rgba(1c293b42)` | New-workspace card fill. |
 | `workspace_strip_hover_tint_color` | color | `rgba(ffffff0f)` | Tint drawn over the hovered workspace thumbnail. |
-| `workspace_strip_active_tint_color` | color | `rgba(5794f21a)` | Tint drawn over the active workspace thumbnail. |
+| `workspace_strip_active_tint_color` | color | `rgba(5794f21a)` | Tint drawn over the active workspace thumbnail. Fades in and out with the selection animation. |
 | `workspace_strip_inactive_tint_color` | color | `rgba(00000000)` | Tint drawn over inactive workspace thumbnails. Defaults to transparent. |
 | `workspace_strip_plus_color` | color | `rgba(f7fbffe0)` | Plus glyph color for the new-workspace card. |
 

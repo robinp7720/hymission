@@ -479,6 +479,11 @@ CHyprColor colorWithAlphaMultiplier(const CHyprColor& color, double multiplier) 
     return color.modifyA(static_cast<float>(std::clamp(color.a * multiplier, 0.0, 1.0)));
 }
 
+CHyprColor mixHyprColor(const CHyprColor& from, const CHyprColor& to, double t) {
+    const auto mixed = mixStripColor({from.r, from.g, from.b, from.a}, {to.r, to.g, to.b, to.a}, t);
+    return CHyprColor(static_cast<float>(mixed.r), static_cast<float>(mixed.g), static_cast<float>(mixed.b), static_cast<float>(mixed.a));
+}
+
 // Shared "create-once, reschedule after" boilerplate for one-shot timers owned
 // by a single SP<CEventLoopTimer> member.
 void armOrRescheduleTimer(SP<CEventLoopTimer>& timer, std::chrono::milliseconds timeout,
@@ -2869,7 +2874,12 @@ std::string OverviewController::overviewStateJson() const {
             {"workspace", entry.workspaceId}, {"active", entry.active}, {"focused_tile", entry.groupFocused},
             {"new_workspace", entry.newWorkspaceSlot}, {"geometry", rectJson(entry.rect)},
             {"visual_geometry", rectJson(workspaceStripEntryRect(entry))},
-            {"selection", entry.selection.value(std::chrono::steady_clock::now(), workspaceStripAnimationsEnabled())}});
+            {"selection", entry.selection.value(std::chrono::steady_clock::now(), workspaceStripAnimationsEnabled())},
+            {"indicator", [&] {
+                const auto indicator = workspaceStripIndicator(entry);
+                const auto rgba = [](const CHyprColor& c) { return nlohmann::json::array({c.r, c.g, c.b, c.a}); };
+                return nlohmann::json{{"fill", rgba(indicator.fill)}, {"tint", rgba(indicator.tint)}};
+            }()}});
     }
     std::size_t zIndex = 0;
     for (const auto& managed : m_state.windows) {
@@ -10469,6 +10479,17 @@ Rect OverviewController::animatedWorkspaceStripRect(const Rect& rect, const PHLM
     return translateRect(rect, offset.x, offset.y);
 }
 
+OverviewController::WorkspaceStripIndicator OverviewController::workspaceStripIndicator(const WorkspaceStripEntry& entry) const {
+    // The active fill and tint follow the same eased selection as the card
+    // size, so the indicator fades between workspaces instead of jumping.
+    const double selection = entry.selection.value(std::chrono::steady_clock::now(), workspaceStripAnimationsEnabled());
+    const CHyprColor restingFill = entry.newWorkspaceSlot ? workspaceStripNewColor() :
+                                   entry.syntheticEmpty   ? workspaceStripEmptyColor() :
+                                                            workspaceStripInactiveColor();
+    const CHyprColor restingTint = entry.newWorkspaceSlot ? CHyprColor(0.0, 0.0, 0.0, 0.0) : workspaceStripInactiveTintColor();
+    return {mixHyprColor(restingFill, workspaceStripActiveColor(), selection), mixHyprColor(restingTint, workspaceStripActiveTintColor(), selection)};
+}
+
 Rect OverviewController::workspaceStripEntryRect(const WorkspaceStripEntry& entry) const {
     const double selection = entry.selection.value(std::chrono::steady_clock::now(), workspaceStripAnimationsEnabled());
     const double scale = getConfigFloat(m_handle, "plugin:hymission:workspace_strip_active_scale", 1.12, 1.0, 1.5);
@@ -14693,17 +14714,10 @@ void OverviewController::renderWorkspaceStrip() const {
         const Rect thumb = rectToMonitorLocal(outerGlobal, renderMonitor);
         const Rect thumbRender = scaleRectForRender(thumb, renderMonitor);
 
-        const CHyprColor cardColor = colorWithAlphaMultiplier(entry.newWorkspaceSlot ? workspaceStripNewColor() :
-                                                              entry.syntheticEmpty ? workspaceStripEmptyColor() :
-                                                              entry.active ? workspaceStripActiveColor() :
-                                                                             workspaceStripInactiveColor(),
-                                                              progress);
+        const auto indicator = workspaceStripIndicator(entry);
+        const CHyprColor cardColor = colorWithAlphaMultiplier(indicator.fill, progress);
         const CHyprColor stateOverlayColor = colorWithAlphaMultiplier(
-            hovered && !draggedHoverTarget && !dropAffected ? workspaceStripHoverTintColor() :
-            entry.active ? workspaceStripActiveTintColor() :
-            entry.newWorkspaceSlot ? CHyprColor(0.0, 0.0, 0.0, 0.0) :
-                                     workspaceStripInactiveTintColor(),
-            progress);
+            hovered && !draggedHoverTarget && !dropAffected ? workspaceStripHoverTintColor() : indicator.tint, progress);
 
         double dragDim = 0.0;
         if (draggedHoverTarget && m_dragDimStripIndex && *m_dragDimStripIndex == index) {

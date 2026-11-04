@@ -53,6 +53,17 @@ Rect workspaceStripSelectionRect(const Rect& slot, double selection, double acti
     return {slot.x + (slot.width - width) * 0.5, slot.y + (slot.height - height) * 0.5, width, height};
 }
 
+StripColor mixStripColor(const StripColor& from, const StripColor& to, double selection) {
+    const double t = finiteConfig(selection, 0.0, 0.0, 1.0);
+    const double alpha = from.a + (to.a - from.a) * t;
+    if (alpha <= 0.0)
+        return {};
+    const auto channel = [&](double lhs, double rhs) {
+        return std::clamp((lhs * from.a * (1.0 - t) + rhs * to.a * t) / alpha, 0.0, 1.0);
+    };
+    return {channel(from.r, to.r), channel(from.g, to.g), channel(from.b, to.b), std::clamp(alpha, 0.0, 1.0)};
+}
+
 float animationMovePercent(std::string style) {
     std::ranges::transform(style, style.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
 

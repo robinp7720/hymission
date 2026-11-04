@@ -170,6 +170,18 @@ struct WorkspaceStripSelection {
 // overlap neighboring cards, the reserved bar, or the overview's window area.
 [[nodiscard]] Rect workspaceStripSelectionRect(const Rect& slot, double selection, double activeScale);
 
+// Straight (non-premultiplied) RGBA, matching Hyprland's color config values.
+struct StripColor {
+    double r = 0.0;
+    double g = 0.0;
+    double b = 0.0;
+    double a = 0.0;
+};
+
+// Blends the workspace indicator between its inactive and active colors. The
+// blend is premultiplied, so a transparent endpoint fades without darkening.
+[[nodiscard]] StripColor mixStripColor(const StripColor& from, const StripColor& to, double selection);
+
 struct GroupProjectionInput {
     std::uintptr_t groupId = 0;
     bool           current = false;

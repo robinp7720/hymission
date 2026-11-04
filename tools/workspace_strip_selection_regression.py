@@ -90,6 +90,13 @@ def run(request, root, env, runtime, processes, handles):
         assert any(.05 < value < .95 for value in values), (anchor, values)
         active = next(e for e in final['strip'] if e['workspace'] == 702)
         inactive = next(e for e in final['strip'] if e['workspace'] == 701)
+        # The indicator fades with the selection: the default active tint is
+        # rgba(5794f21a) and the inactive tint is transparent.
+        tint_alphas = [e['indicator']['tint'][3] for f in frames for e in f['overview'].get('strip', []) if e['workspace'] == 702]
+        settled = active['indicator']['tint'][3]
+        assert abs(settled - 0x1a / 255) < .002 and inactive['indicator']['tint'][3] < .002, (anchor, active, inactive)
+        assert any(.1 * settled < a < .9 * settled for a in tint_alphas), (anchor, tint_alphas)
+        assert all(b >= a - 1e-6 for a, b in zip(tint_alphas, tint_alphas[1:])), (anchor, tint_alphas)
         ratio = active['visual_geometry']['width'] / inactive['visual_geometry']['width']
         assert abs(ratio - 1.12) < .001, (anchor, ratio)
         for frame in frames:
@@ -106,12 +113,15 @@ def run(request, root, env, runtime, processes, handles):
             frame['pixels'] = str(png)
         prefix.with_suffix('.json').write_text(json.dumps(frames, indent=2))
         subprocess.run(['grim', str(root / (anchor + '-selected.png'))], env=child, check=True, capture_output=True)
-        results.append(dict(anchor=anchor, frames=len(frames), active_size_ratio=ratio, intermediate_frames=sum(.05 < v < .95 for v in values)))
+        results.append(dict(anchor=anchor, frames=len(frames), active_size_ratio=ratio, intermediate_frames=sum(.05 < v < .95 for v in values),
+                            intermediate_indicator_frames=sum(.1 * settled < a < .9 * settled for a in tint_alphas)))
 
         # Reduced motion updates selection immediately, including on a rebuild.
         evaluate('hl.config({animations={enabled=false}}); hl.dispatch(hl.dsp.focus({workspace=703}))')
         reduced = wait(lambda s: selected(s, 703))
         assert all(e['selection'] in (0, 1) for e in reduced['strip'])
+        assert all(min(abs(e['indicator']['tint'][3]), abs(e['indicator']['tint'][3] - settled)) < 1e-6
+                   for e in reduced['strip'] if not e['new_workspace']), reduced['strip']
         evaluate('hl.plugin.hymission.close()')
         wait(lambda s: not s['active'])
         evaluate('hl.config({animations={enabled=true}})')
@@ -124,4 +134,4 @@ def run(request, root, env, runtime, processes, handles):
     errors = request('/configerrors').strip()
     assert errors in ('', 'ok'), errors
     (root / 'results.json').write_text(json.dumps(results, indent=2))
-    print('PASS: animated workspace selection, three anchors, visible click targets, bar reservation, reduced motion, equal-size opt-out')
+    print('PASS: animated workspace selection and indicator, three anchors, visible click targets, bar reservation, reduced motion, equal-size opt-out')

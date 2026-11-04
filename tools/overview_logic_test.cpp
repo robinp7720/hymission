@@ -90,6 +90,36 @@ int main() {
                     return EXIT_FAILURE;
             }
         }
+
+        const StripColor inactiveFill{0.05, 0.09, 0.15, 0.18};
+        const StripColor activeFill{0.10, 0.18, 0.32, 0.24};
+        const auto sameColor = [](const StripColor& lhs, const StripColor& rhs) {
+            return closeEnough(lhs.r, rhs.r) && closeEnough(lhs.g, rhs.g) && closeEnough(lhs.b, rhs.b) && closeEnough(lhs.a, rhs.a);
+        };
+        if (!expect(sameColor(mixStripColor(inactiveFill, activeFill, 0.0), inactiveFill) &&
+                        sameColor(mixStripColor(inactiveFill, activeFill, 1.0), activeFill),
+                    "indicator color must match its configured endpoints") ||
+            !expect(sameColor(mixStripColor(inactiveFill, activeFill, -1.0), inactiveFill) &&
+                        sameColor(mixStripColor(inactiveFill, activeFill, 2.0), activeFill),
+                    "indicator color must clamp out-of-range selection"))
+            return EXIT_FAILURE;
+
+        // The default inactive tint is fully transparent. Blending its black
+        // RGB channels straight would darken the active tint mid-transition.
+        const StripColor activeTint{0.34, 0.58, 0.95, 0.10};
+        const auto halfTint = mixStripColor(StripColor{0.0, 0.0, 0.0, 0.0}, activeTint, 0.5);
+        if (!expect(closeEnough(halfTint.a, 0.05) && closeEnough(halfTint.r, activeTint.r) && closeEnough(halfTint.g, activeTint.g) &&
+                        closeEnough(halfTint.b, activeTint.b),
+                    "fading in from transparent must keep the tint hue and only change alpha"))
+            return EXIT_FAILURE;
+        double previousAlpha = -1.0;
+        for (double t = 0.0; t <= 1.0; t += 0.125) {
+            const auto color = mixStripColor(inactiveFill, activeFill, t);
+            if (!expect(color.a >= previousAlpha - 1e-12 && color.a >= 0.0 && color.a <= 1.0,
+                        "indicator alpha must move monotonically between endpoints"))
+                return EXIT_FAILURE;
+            previousAlpha = color.a;
+        }
     }
 
     // Quickshell reserves 58px but keeps an 820px layer for popups. The
